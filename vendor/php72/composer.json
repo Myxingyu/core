@@ -1,0 +1,19 @@
+{
+    "name": "Core",
+    "require": {
+        "vectorface/whip": "^0.3.2",
+        "monolog/monolog": "^1.21",
+        "piwik/ini": "^1.0.6",
+        "catfan/medoo": "^1.5.6"
+    },
+    "repositories": [{
+	    "type": "composer",
+	    "url": "https://packagist.phpcomposer.com"
+	}
+    ],
+    "autoload": {
+        "psr-4": {
+            "Core\\": "../../"
+        }
+    }
+}
