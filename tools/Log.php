@@ -107,7 +107,14 @@ class Log
         self::setLogPath();
         $methodList = explode("_", strtolower($method));
         if (count($methodList) > 1) {
-
+            if (count($methodList) == 2) {
+                self::addSystemLog($methodList[0], $methodList[1], $arguments);
+            } elseif (count($methodList) > 2) {
+                self::addSystemLog($methodList[0], $methodList[2], $arguments, $methodList[1]);
+            }
+        } else {
+            list ($logPath, $line) = self::getBackTrace(debug_backtrace(0, 1));
+            self::addGeneralLog($logPath, $line, $method, $arguments);
         }
     }
 
@@ -123,5 +130,54 @@ class Log
             "_"
         ], $backtrace[0]['file']), "-");
         return [$callFile, $backtrace[0]['line']];
+    }
+
+    private static function addSystemLog($logTag, $logType, $logData, $logPrefix = null)
+    {
+        $logPath = $logPrefix ? $logTag . "-" . $logPrefix : $logTag;
+        if (!isset(self::$singleFormatter[$logPath])) {
+            $output = "%datetime%#%level_name%#%message%#%context%\n";
+            self::$singleFormatter[$logPath] = new LineFormatter($output);
+        }
+        $log = self::getSingleLog($logPath);
+        $realPath = self::$logSetting['logPath'] . self::$logSetting['logList'][$logTag]['dir'] . $logPath . self::getSlice();
+        if (!isset(self::$singleStreamHandlerPath[$logPath]) || self::$singleStreamHandlerPath[$logPath] != $realPath) {
+            self::$singleStreamHandler[$logPath] = new StreamHandler($realPath, self::$logSetting['logList'][$logTag]['logLevel'],true,'0666');
+            self::$singleStreamHandler[$logPath]->setFormatter(self::$singleFormatter[$logPath]);
+            self::$singleLog[$logPath]->pushHandler(self::$singleStreamHandler[$logPath]);
+            self::$singleStreamHandlerPath[$logPath] = $realPath;
+        }
+        self::writeLog($logPath, $logType, $logData);
+    }
+
+    private static function addGeneralLog($logPath, $line, $logType, $logData)
+    {
+        if (!isset(self::$singleFormatter[$logPath . "-" . $line])) {
+            $output = "%datetime%#line:{$line}#%level_name%#%message%#%context%\n";
+            self::$singleFormatter[$logPath . "-" . $line] = new LineFormatter($output);
+            if (isset(self::$singleStreamHandler[$logPath])) {
+                self::$singleStreamHandler[$logPath]->setFormatter(self::$singleFormatter[$logPath . "-" . $line]);
+            }
+        }
+        $log = self::getSingleLog($logPath);
+        $realPath = self::$logSetting['logPath'] . self::$logSetting['logList']['general']['dir'] . $logPath . self::getSlice();
+        if (!isset(self::$singleStreamHandlerPath[$logPath]) || self::$singleStreamHandlerPath[$logPath] != $realPath) {
+            self::$singleStreamHandler[$logPath] = new StreamHandler($realPath, self::$logSetting['logList']['general']['logLevel'],true,'0666');
+            self::$singleStreamHandler[$logPath]->setFormatter(self::$singleFormatter[$logPath . "-" . $line]);
+            self::$singleLog[$logPath]->pushHandler(self::$singleStreamHandler[$logPath]);
+            self::$singleStreamHandlerPath[$logPath] = $realPath;
+        }
+        self::writeLog($logPath, $logType, $logData);
+    }
+
+    private static function writeLog($logPath, $logType, $logData)
+    {
+        $log = self::getSingleLog($logPath);
+        $message = Ip::getClientIp() . "#" . array_shift($logData);
+        if (PHP_SAPI == "fpm-fcgi" && isset($_SERVER['HTTP_USER_AGENT'])) {
+            array_push($logData, $_SERVER['HTTP_USER_AGENT']);
+        }
+        $addFunction = 'add' . ucfirst($logType);
+        $log->$addFunction($message, $logData);
     }
 }
